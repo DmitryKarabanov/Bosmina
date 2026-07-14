@@ -3,19 +3,18 @@ import math
 import base64
 from collections import defaultdict
 from pyvis.network import Network
-from itertools import combinations
-import os
 from functools import lru_cache
+import networkx as nx
 
 # ==========================================
 # 1. SETTINGS
 # ==========================================
 NEXUS_FILE = "bosmina_popart.nex"
 OUTPUT_HTML = "Bosmina_TCS_MedianJoining.html"
-TCS_CONFIDENCE = 0.90  # 95% confidence limit (adjusted to 0.90 as in original code logic)
-MJ_EPSILON = 1.0       # 0 = maximum network simplification
-MAX_MEDIANS = 14       # Limit on the number of median vectors
-MAX_MJ_ITERATIONS = 1000 # Protection from infinite loops
+TCS_CONFIDENCE = 0.90
+MJ_EPSILON = 1.0
+MAX_MEDIANS = 48
+MAX_MJ_ITERATIONS = 1000
 
 IUPAC = {
     'A': {'A'}, 'C': {'C'}, 'G': {'G'}, 'T': {'T'}, 'U': {'T'},
@@ -57,7 +56,6 @@ print(f"Found {len(seqs)} sequences.")
 # 3. GENETICALLY CORRECT DISTANCE CALCULATION
 # ==========================================
 def calc_dna_dist(seq1, seq2):
-    """IUPAC-aware distance: ignores gaps, correctly handles ambiguities."""
     dist = 0
     min_len = min(len(seq1), len(seq2))
     for i in range(min_len):
@@ -69,22 +67,6 @@ def calc_dna_dist(seq1, seq2):
         if set1.isdisjoint(set2):
             dist += 1
     return dist
-
-def calc_dna_dist_detailed(seq1, seq2):
-    """Returns (distance, positions_list) - for debugging and reports."""
-    dist = 0
-    positions = []
-    min_len = min(len(seq1), len(seq2))
-    for i in range(min_len):
-        c1, c2 = seq1[i].upper(), seq2[i].upper()
-        set1 = IUPAC.get(c1, set())
-        set2 = IUPAC.get(c2, set())
-        if not set1 or not set2:
-            continue
-        if set1.isdisjoint(set2):
-            dist += 1
-            positions.append((i+1, c1, c2))
-    return dist, positions
 
 # ==========================================
 # 4. COLLAPSING INTO UNIQUE HAPLOTYPES
@@ -102,8 +84,6 @@ print(f"Collapsed to {len(unique_haps)} unique haplotypes.")
 # ==========================================
 @lru_cache(maxsize=None)
 def calc_dna_dist_cached(seq1, seq2):
-    """Cached version: calculated once for identical pairs."""
-    # Sort so that (A,B) and (B,A) use the same cache
     if seq1 > seq2:
         seq1, seq2 = seq2, seq1
     dist = 0
@@ -119,42 +99,35 @@ def calc_dna_dist_cached(seq1, seq2):
     return dist
 
 # ==========================================
-# 5. TCS THRESHOLD CALCULATION (Templeton et al., 1992)
+# 5. TCS THRESHOLD CALCULATION
 # ==========================================
-print("Calculating probabilistic TCS threshold (95% confidence)...")
+print("Calculating probabilistic TCS threshold...")
 
 def poisson_pmf(k, lam):
-    """P(X = k) for Poisson distribution."""
     try:
         return (lam**k) * math.exp(-lam) / math.factorial(k)
     except (OverflowError, ValueError):
         return 0.0
 
 def tcs_connection_limit(n_haplotypes, confidence=0.95):
-    """Calculates parsimony limit by Templeton et al. (1992) formula.
-    lambda = 2 * ln(N), then find minimal k where
-    sum P(i, lambda) from 1 to k >= (1 - confidence).
-    """
     if n_haplotypes <= 1:
         return 1
     lam = 2.0 * math.log(n_haplotypes)
     cumul = 0.0
-    for k in range(1, 1000):  # protection from infinite loop
+    for k in range(1, 1000):
         cumul += poisson_pmf(k, lam)
         if cumul >= (1.0 - confidence):
             return k
     return 1
 
 TCS_LIMIT = tcs_connection_limit(len(unique_haps), TCS_CONFIDENCE)
-print(f"Automatic TCS threshold: <= {TCS_LIMIT} mutations (at {int(TCS_CONFIDENCE*100)}% confidence).")
+print(f"Automatic TCS threshold: <= {TCS_LIMIT} mutations.")
 
 # ==========================================
-# 6. MEDIAN-JOINING NETWORK (Bandelt et al., 1999)
+# 6. MEDIAN-JOINING NETWORK
 # ==========================================
 print("Building Minimum Spanning Network...")
 
-# --- 6.1. Build MST (Minimum Spanning Tree) ---
-# First, calculate pairwise distance matrix
 n = len(unique_haps)
 dist_matrix = [[0] * n for _ in range(n)]
 for i in range(n):
@@ -163,9 +136,7 @@ for i in range(n):
         dist_matrix[i][j] = d
         dist_matrix[j][i] = d
 
-# Prim's algorithm for MST
 def prim_mst(n_nodes, dist_mat):
-    """Returns list of MST edges: [(i, j, weight), ...]"""
     in_mst = [False] * n_nodes
     in_mst[0] = True
     edges = []
@@ -173,11 +144,9 @@ def prim_mst(n_nodes, dist_mat):
         min_w = float('inf')
         best_edge = None
         for u in range(n_nodes):
-            if not in_mst[u]:
-                continue
+            if not in_mst[u]: continue
             for v in range(n_nodes):
-                if in_mst[v]:
-                    continue
+                if in_mst[v]: continue
                 if dist_mat[u][v] < min_w:
                     min_w = dist_mat[u][v]
                     best_edge = (u, v, min_w)
@@ -190,41 +159,26 @@ def prim_mst(n_nodes, dist_mat):
 mst_edges = prim_mst(n, dist_matrix)
 print(f"MST built: {len(mst_edges)} edges.")
 
-# --- 6.2. Build adjacency graph for triplet search ---
 adj = defaultdict(set)
-edge_weights = {}
 for u, v, w in mst_edges:
     adj[u].add(v)
     adj[v].add(u)
-    edge_weights[(min(u,v), max(u,v))] = w
 
-# ==========================================
-# 6.3. FAST SINGLE MEDIAN CALCULATION PER TRIPLET
-# ==========================================
 def compute_single_median(s1, s2, s3):
-    """Returns ONE majority median sequence.
-    At each position, select the nucleotide found in at least 2 of 3 sequences.
-    If all three are different, take the first one.
-    """
     if not (len(s1) == len(s2) == len(s3)):
         return None
-
     median_chars = []
     for i in range(len(s1)):
         c1, c2, c3 = s1[i], s2[i], s3[i]
-        # Majority voting
         if c1 == c2 or c1 == c3:
             median_chars.append(c1)
         elif c2 == c3:
             median_chars.append(c2)
         else:
-            # Star position: all three different. Take the first nucleotide.
             median_chars.append(c1)
-
     return ''.join(median_chars)
 
-# --- 6.4. Iterative median addition (OPTIMIZED VERSION) ---
-print("Searching for median vectors (Median-Joining, fast mode)...")
+print("Searching for median vectors...")
 all_sequences = set(unique_haps)
 all_seq_list = list(unique_haps)
 median_flags = [False] * len(unique_haps)
@@ -233,7 +187,6 @@ changed = True
 medians_added = 0
 
 def find_triplets(adj_dict):
-    """Finds triplets of nodes in MST."""
     triplets = set()
     for u in adj_dict:
         neighbors_u = list(adj_dict[u])
@@ -254,7 +207,6 @@ while changed and iteration < MAX_MJ_ITERATIONS and medians_added < MAX_MEDIANS:
         u, v, w = triplet
         s1, s2, s3 = all_seq_list[u], all_seq_list[v], all_seq_list[w]
         
-        # Only ONE median per triplet instead of exponential explosion
         median_seq = compute_single_median(s1, s2, s3)
         if median_seq is None or median_seq in all_sequences:
             continue
@@ -268,9 +220,8 @@ while changed and iteration < MAX_MJ_ITERATIONS and medians_added < MAX_MEDIANS:
         print(f"  No new medians found. Stopping.")
         break
 
-    # Take top-N medians with minimum cost
     candidates.sort(key=lambda x: x[1])
-    top_candidates = candidates[:5]  # Add up to 5 best per iteration
+    top_candidates = candidates[:5]
 
     added_this_iter = 0
     for median_seq, cost, triplet in top_candidates:
@@ -284,7 +235,6 @@ while changed and iteration < MAX_MJ_ITERATIONS and medians_added < MAX_MEDIANS:
         all_sequences.add(median_seq)
         median_flags.append(True)
         
-        # Connect median to the triplet
         u, v, w = triplet
         for neighbor in [u, v, w]:
             adj[neighbor].add(new_idx)
@@ -294,24 +244,21 @@ while changed and iteration < MAX_MJ_ITERATIONS and medians_added < MAX_MEDIANS:
         added_this_iter += 1
         changed = True
 
-    print(f"  Added {added_this_iter} medians. Total: {medians_added}.")
-
     if added_this_iter == 0:
         break
 
 print(f"Added {medians_added} median vectors in {iteration} iterations.")
 
 # ==========================================
-# 7. PYVIS VISUALIZATION (ENLARGED NODES)
+# 7. GRAPH CONSTRUCTION (NETWORKX)
 # ==========================================
-print("Generating final network with enlarged nodes...")
+print("Constructing NetworkX graph for reliable edge labels...")
 COLORS = {
     'NAmer': '#1f77b4', 'SAmer': '#d62728', 'Eur': '#8c564b',
     'Asia': '#f1c40f', 'Austral': '#2ca02c', 'Unknown': '#cccccc'
 }
 
 def make_pie_svg(proportions, size=64):
-    """Generates SVG pie chart (or white circle for medians)."""
     total = sum(proportions.values())
     cx, cy, r = size/2, size/2, size/2 - 2
     if total == 0:
@@ -341,22 +288,12 @@ def make_pie_svg(proportions, size=64):
         start_angle = end_angle
 
     paths.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="#222" stroke-width="2"/>')
-
     svg_content = f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}">' + ''.join(paths) + '</svg>'
     return f"data:image/svg+xml;base64,{base64.b64encode(svg_content.encode()).decode()}"
 
-net = Network(height="100vh", width="100%", bgcolor="#ffffff", font_color="#000000", directed=False)
-
-# PHYSICS SETUP FOR "SPACIOUS" NETWORK:
-net.barnes_hut(
-    gravity=-12000,          # Strong node repulsion
-    central_gravity=0.05,    # Very weak attraction to screen center
-    spring_length=300,       # Longer "springs" between nodes
-    spring_strength=0.01,    # Soft springs that don't pull clusters together
-    damping=0.10             # Smooth damping of oscillations
-)
-
+G = nx.Graph()
 median_counter = 0
+
 for idx, seq in enumerate(all_seq_list):
     if median_flags[idx] is None:
         continue
@@ -383,18 +320,15 @@ for idx, seq in enumerate(all_seq_list):
 
     pie_img = make_pie_svg(total_traits, size=64)
     
-    # FORMATTING TOOLTIPS (CLEAN HTML)
     if is_median:
-        # Tooltip for median vector
         tooltip = (
             f"MEDIAN VECTOR: {node_id}\n"
             f"(Not detected in the sample,\n"
             f"presumed ancestral haplotype)"
         )
-        node_size = 14
+        node_size = 10
         font_size = 12
     else:
-        # Tooltip for real haplotype
         region_lines = [f"* {r}: {c}" for r, c in total_traits.items()]
         region_text = "\n".join(region_lines) if region_lines else "* No data"
         
@@ -412,13 +346,12 @@ for idx, seq in enumerate(all_seq_list):
             f"Sequences:\n{seq_text}"
         )
 
-        # ENLARGE REAL HAPLOTYPES
-        node_size = 50 + (freq * 8.0)
+        node_size = 10 + (freq * 2.0)
         font_size = 24
 
-    net.add_node(
+    G.add_node(
         node_id,
-        label=node_label,
+        label=" ",
         title=tooltip,
         shape='circularImage',
         image=pie_img,
@@ -429,11 +362,10 @@ for idx, seq in enumerate(all_seq_list):
     )
 
 # ==========================================
-# 8. CLEANED TCS + VISUAL MST BRIDGES
+# 8. EDGES CONSTRUCTION
 # ==========================================
-print(f"Building network (TCS <= {TCS_LIMIT} mutations + cleaning 'spaghetti')...")
+print(f"Adding edges (TCS <= {TCS_LIMIT} mutations)...")
 
-# SETTING: Max number of connections per haplotype within a cluster.
 MAX_CONNECTIONS_PER_NODE = 4
 
 def get_node_id(idx):
@@ -445,7 +377,6 @@ def get_node_id(idx):
 
 n_total = len(all_seq_list)
 
-# --- 8.1. Collect, filter, and draw TCS connections ---
 potential_edges = []
 for i in range(n_total):
     if median_flags[i] is None: continue
@@ -460,32 +391,31 @@ potential_edges.sort(key=lambda x: x[0])
 node_degrees = {i: 0 for i in range(n_total)}
 tcs_edges_count = 0
 
-# Remember ALL actually drawn TCS connections
 drawn_tcs_edges = []
 for d, i, j in potential_edges:
     if node_degrees[i] < MAX_CONNECTIONS_PER_NODE and node_degrees[j] < MAX_CONNECTIONS_PER_NODE:
         id_i = get_node_id(i)
         id_j = get_node_id(j)
         
-        net.add_edge(
+        edge_width = max(1, 10.0 - d * 1.0)
+        G.add_edge(
             id_i, id_j,
+            # ИЗМЕНЕНО: Убрали label=str(d) — теперь число мутаций только во всплывающей подсказке
             title=f"TCS: {d} mutations",
             color={'color': '#b0b0b0', 'highlight': '#333333'},
-            width=max(10, 6.5 - d * 0.8),
+            value=edge_width,
+            width=edge_width,
             smooth={'type': 'continuous', 'roundness': 0.1}
         )
         node_degrees[i] += 1
         node_degrees[j] += 1
-        drawn_tcs_edges.append((i, j))  # Save the fact of drawing
+        drawn_tcs_edges.append((i, j))
         tcs_edges_count += 1
 
-print(f"Created {tcs_edges_count} cleaned TCS connections (limit: {MAX_CONNECTIONS_PER_NODE} per node).")
+print(f"Created {tcs_edges_count} cleaned TCS connections.")
 
-# --- 8.2. Search for VISUAL components (by actually drawn edges!) ---
-print("Searching for VISUAL components (by what is actually on screen)...")
-
+print("Searching for VISUAL components...")
 def find_visual_components(n_nodes, edges):
-    """Finds connected components by the LIST OF ACTUALLY DRAWN edges."""
     adj = defaultdict(set)
     for i, j in edges:
         adj[i].add(j)
@@ -511,23 +441,17 @@ def find_visual_components(n_nodes, edges):
         components.append(comp)
     return components
 
-# KEY CHANGE: search components by drawn_tcs_edges, not all potential ones!
 components = find_visual_components(n_total, drawn_tcs_edges)
-print(f"Found {len(components)} VISUAL components (clusters).")
+print(f"Found {len(components)} VISUAL components.")
 
-# --- 8.3. MST between VISUAL components ---
 print("Building MST between VISUAL clusters...")
-
 class UnionFind:
     def __init__(self, n):
         self.parent = list(range(n))
-        
     def find(self, i):
-        if self.parent[i] == i:
-            return i
+        if self.parent[i] == i: return i
         self.parent[i] = self.find(self.parent[i])
         return self.parent[i]
-        
     def union(self, i, j):
         root_i = self.find(i)
         root_j = self.find(j)
@@ -564,23 +488,67 @@ bridge_edges_count = 0
 for idx_a, idx_b, dist in mst_bridges:
     id_a = get_node_id(idx_a)
     id_b = get_node_id(idx_b)
-    net.add_edge(
+    G.add_edge(
         id_a, id_b,
+        # ИЗМЕНЕНО: Убрали label=str(dist)
         title=f"MST bridge: {dist} mutations\n(minimal connection between clusters)",
         color={'color': '#ff7f0e', 'highlight': '#d62728'},
-        width=10.0,
+        value=5.0,
+        width=5.0,
         dashes=True,
         smooth={'type': 'curvedCW', 'roundness': 0.4}
     )
     bridge_edges_count += 1
 
-print(f"Added exactly {bridge_edges_count} MST bridges - now ALL visible clusters are connected!")
+print(f"Added {bridge_edges_count} MST bridges.")
 
 # ==========================================
-# 9. HTML SAVING WITH LEGEND
+# 9. PYVIS CONVERSION & PHYSICS
+# ==========================================
+print("Converting to PyVis and applying physics...")
+net = Network(height="100vh", width="100%", bgcolor="#ffffff", font_color="#000000", directed=False)
+
+net.from_nx(G, show_edge_weights=False)
+
+net.barnes_hut(
+    gravity=-50000,          
+    central_gravity=0.001,    
+    spring_length=1200,       
+    spring_strength=0.001,    
+    damping=0.20             
+)
+
+net.set_options("""
+{
+  "edges": {
+    "scaling": {
+      "min": 1,
+      "max": 10
+    },
+    "smooth": {
+      "type": "continuous",
+      "roundness": 0.1
+    }
+  },
+  "interaction": {
+   "dragNodes": true,
+   "dragView": true,
+   "zoomView": true,
+   "hover": true
+ },
+ "physics": {
+   "stabilization": {
+     "enabled": true,
+     "iterations": 1000
+   }
+ }
+}
+""")
+
+# ==========================================
+# 10. HTML GENERATION
 # ==========================================
 print("Generating final HTML...")
-
 legend_html = f"""
 <div style="position: fixed; top: 20px; right: 20px; background: rgba(255,255,255,0.97); 
 border: 1px solid #ccc; padding: 18px 22px; border-radius: 10px; font-family: Arial, sans-serif; 
@@ -591,16 +559,12 @@ box-shadow: 2px 4px 12px rgba(0,0,0,0.2); z-index: 1000; font-size: 18px; color:
     <div style="line-height: 0.75; margin-bottom: 4px;">
         <span style="color:#1f77b4; font-size: 48px; vertical-align: middle;">&#9679;</span> 
         <span style="vertical-align: middle;">North America</span><br>
-        
         <span style="color:#d62728; font-size: 48px; vertical-align: middle;">&#9679;</span> 
         <span style="vertical-align: middle;">South America</span><br>
-        
         <span style="color:#8c564b; font-size: 48px; vertical-align: middle;">&#9679;</span> 
         <span style="vertical-align: middle;">Europe</span><br>
-        
         <span style="color:#f1c40f; font-size: 48px; vertical-align: middle;">&#9679;</span> 
         <span style="vertical-align: middle;">Asia</span><br>
-        
         <span style="color:#2ca02c; font-size: 48px; vertical-align: middle;">&#9679;</span> 
         <span style="vertical-align: middle;">Australia</span>
     </div>
@@ -619,7 +583,9 @@ box-shadow: 2px 4px 12px rgba(0,0,0,0.2); z-index: 1000; font-size: 18px; color:
     
     <div style="font-size: 15px; line-height: 1.5;">
         <b>Size</b> = frequency<br>
-        <b style="color:#666;">&#9711; Dashed</b> = median vector<br>
+        <b>Line width</b> = mutations (thicker = fewer)<br>
+        <b style="color:#ff7f0e;">┄ Dashed orange</b> = MST bridge<br>
+        <b style="color:#666;">&#9711; Dashed circle</b> = median vector<br>
         <i style="font-size:13px; color:#888;">(ancestral haplotype)</i>
     </div>
 </div>
@@ -631,5 +597,5 @@ html_content = html_content.replace("</body>", legend_html + "\n</body>")
 with open(OUTPUT_HTML, "w", encoding="utf-8") as f:
     f.write(html_content)
 
-print(f"Done! File '{OUTPUT_HTML}' is ready in your browser.")
+print(f"Done! File '{OUTPUT_HTML}' is ready.")
 print(f"Summary: {len(unique_haps)} real haplotypes + {median_counter} median vectors.")
