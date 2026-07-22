@@ -9,10 +9,23 @@ Each visualization is a self-contained HTML file that can be opened directly in 
 
 | # | Visualization | Main file | Description |
 |---|---------------|-----------|-------------|
-| 1 | **Net** | `Bosmina_TCS_MedianJoining.html` + subgenus networks | Haplotype networks for the entire genus and each subgenus |
+| 1 | **Net** | `Bosmina_TCS_MedianJoining.html` and `subgenus` networks | Haplotype networks for the entire genus and each subgenus |
 | 2 | **bGMYC4** | `bGMYC_interactive_heatmap.html` + resource directory | bGMYC4 results with phylogenetic tree and heatmap |
 | 3 | **Summary** | `Delimitation_heatmap_bgmyc_tree.html` + resource directory | Comparison charts of all delimitation methods |
 | 4 | **Agreement** | `Agreement_Matrix.html` + resource directory | Interactive heatmap showing congruence between delimitation methods |
+
+---
+
+##  How to Use
+
+### Option 1: View on GitHub Pages (recommended)
+
+[**Bosmina Integrative Delimitation**](https://dmitrykarabanov.github.io/Bosmina/)
+
+### Option 2: Open locally
+1. Download the `.html` file and the additional directory
+2. Double-click to open in your web browser
+3. Use mouse to **zoom**, **pan**, and **hover** for details
 
 ---
 
@@ -42,19 +55,6 @@ Interactive haplotype networks are available for the entire genus *Bosmina* and 
 - **Edge length / ticks** — number of mutational steps between haplotypes
 - **Colors** — geographic or taxonomic grouping (see legend in each file)
 - **Hover** — move cursor over any node to see haplotype details
-
----
-
-##  How to Use
-
-### Option 1: View on GitHub Pages (recommended)
-
-[**Bosmina Integrative Delimitation**](https://dmitrykarabanov.github.io/Bosmina/)
-
-### Option 2: Open locally
-1. Download the `.html` file and the additional directory
-2. Double-click to open in your web browser
-3. Use mouse to **zoom**, **pan**, and **hover** for details
 
 ---
 
