@@ -18,10 +18,11 @@ except ImportError:
 # ==========================================
 NEXUS_FILE = "bosmina_popart.nex"
 XLSX_FILE = "_resources.xlsx"
-OUTPUT_HTML = "Bosmina_TCS_MedianJoining.html"
+OUTPUT_HTML = "Sinobosmina_TCS.html"
+FILTER_GROUP = "Sinobosmina"   # ← Фильтр по столбцу Group
 TCS_CONFIDENCE = 0.90
 MJ_EPSILON = 1.0
-MAX_MEDIANS = 48
+MAX_MEDIANS = 7
 MAX_MJ_ITERATIONS = 1000
 
 IUPAC = {
@@ -58,45 +59,77 @@ for line in traits_match.group(1).strip().split('\n'):
         counts = [int(x) for x in parts[1].split(',')]
         seq_traits[seq_name] = dict(zip(trait_labels, counts))
 
-print(f"Found {len(seqs)} sequences.")
+print(f"Found {len(seqs)} sequences in NEXUS.")
 
 # ==========================================
-# 2.5. READ HAPLOGROUP DATA FROM XLSX
+# 2.5. READ XLSX: Group, Country, Haplogroup
 # ==========================================
-print(f"Reading haplogroup data from {XLSX_FILE}...")
+print(f"Reading data from {XLSX_FILE}...")
 wb = openpyxl.load_workbook(XLSX_FILE, read_only=True)
 ws = wb.active
 
 header = [cell.value for cell in ws[1]]
 seq_col_idx = None
 hg_col_idx = None
+group_col_idx = None
+country_col_idx = None
 for i, h in enumerate(header):
     if h and str(h).strip().lower() == 'seq':
         seq_col_idx = i
     if h and str(h).strip().lower() == 'haplogroup':
         hg_col_idx = i
+    if h and str(h).strip().lower() == 'group':
+        group_col_idx = i
+    if h and str(h).strip().lower() == 'country':
+        country_col_idx = i
 
 if seq_col_idx is None or hg_col_idx is None:
     print(f"ERROR: Could not find 'seq' or 'Haplogroup' columns in {XLSX_FILE}")
     print(f"Found columns: {header}")
     exit(1)
 
+if group_col_idx is None:
+    print(f"WARNING: 'Group' column not found. No filtering will be applied.")
+
+if country_col_idx is None:
+    print(f"WARNING: 'Country' column not found. Pie charts will be empty.")
+
 seq_to_haplogroup = {}
+seq_to_group = {}
+seq_to_country = {}
 for row in ws.iter_rows(min_row=2):
     seq_name = row[seq_col_idx].value
+    if not seq_name:
+        continue
+    seq_name = str(seq_name).strip()
+
     hg = row[hg_col_idx].value
-    if seq_name and hg:
-        seq_to_haplogroup[str(seq_name).strip()] = str(hg).strip()
+    if hg:
+        seq_to_haplogroup[seq_name] = str(hg).strip()
+
+    if group_col_idx is not None:
+        grp = row[group_col_idx].value
+        if grp:
+            seq_to_group[seq_name] = str(grp).strip()
+
+    if country_col_idx is not None:
+        ctry = row[country_col_idx].value
+        if ctry:
+            seq_to_country[seq_name] = str(ctry).strip()
 
 wb.close()
-print(f"Loaded {len(seq_to_haplogroup)} haplogroup assignments.")
+print(f"Loaded: {len(seq_to_haplogroup)} haplogroups, {len(seq_to_country)} countries.")
 
-# Проверяем совпадение имён
-nexus_names = set(seqs.keys())
-xlsx_names = set(seq_to_haplogroup.keys())
-missing = nexus_names - xlsx_names
-if missing:
-    print(f"WARNING: {len(missing)} NEXUS sequences not found in xlsx (first 5): {list(missing)[:5]}")
+# === ФИЛЬТРАЦИЯ по Group ===
+if group_col_idx is not None:
+    allowed_seqs = {name for name, grp in seq_to_group.items() if grp == FILTER_GROUP}
+    seqs = {name: seq for name, seq in seqs.items() if name in allowed_seqs}
+    print(f"Filtered to {len(seqs)} sequences (Group = '{FILTER_GROUP}').")
+    if len(seqs) == 0:
+        print("ERROR: No sequences found for this group! Check 'Group' column values.")
+        exit(1)
+else:
+    print("No filtering applied (Group column not found).")
 
 # ==========================================
 # 3. GENETICALLY CORRECT DISTANCE CALCULATION
@@ -125,7 +158,7 @@ unique_haps = list(haplotypes.keys())
 hap_names = {seq: f"Hap_{i+1:03d}" for i, seq in enumerate(unique_haps)}
 print(f"Collapsed to {len(unique_haps)} unique haplotypes.")
 
-# Определяем гаплогруппу для каждого гаплотипа (мажоритарная)
+# Гаплогруппа для каждого гаплотипа (мажоритарная)
 hap_to_haplogroup = {}
 for seq, names in haplotypes.items():
     hg_counts = defaultdict(int)
@@ -146,6 +179,20 @@ HG_PALETTE = [
 unique_haplogroups = sorted(set(hap_to_haplogroup.values()))
 hg_colors = {hg: HG_PALETTE[i % len(HG_PALETTE)] for i, hg in enumerate(unique_haplogroups)}
 print(f"Found {len(unique_haplogroups)} haplogroups: {unique_haplogroups}")
+
+# Палитра для стран
+COUNTRY_PALETTE = [
+    '#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4',
+    '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990',
+    '#dcbeff', '#9A6324', '#800000', '#aaffc3', '#808000',
+    '#ffd8b1', '#000075', '#a9a9a9', '#ffe119', '#008080',
+    '#ff4500', '#2e8b57', '#4169e1', '#daa520', '#8b008b',
+    '#00ced1', '#ff69b4', '#adff2f', '#cd853f', '#708090'
+]
+
+unique_countries = sorted(set(seq_to_country.values()))
+country_colors = {c: COUNTRY_PALETTE[i % len(COUNTRY_PALETTE)] for i, c in enumerate(unique_countries)}
+print(f"Found {len(unique_countries)} countries: {unique_countries}")
 
 # ==========================================
 # FAST DISTANCE CALCULATION WITH CACHING
@@ -340,12 +387,8 @@ print(f"Assigned haplogroups to {len(median_haplogroups)} median vectors.")
 # 7. GRAPH CONSTRUCTION (NETWORKX)
 # ==========================================
 print("Constructing NetworkX graph...")
-COLORS = {
-    'NAmer': '#1f77b4', 'SAmer': '#d62728', 'Eur': '#8c564b',
-    'Asia': '#f1c40f', 'Austral': '#2ca02c', 'Unknown': '#cccccc'
-}
 
-def make_pie_svg(proportions, size=64):
+def make_pie_svg(proportions, color_map, size=64):
     total = sum(proportions.values())
     cx, cy, r = size/2, size/2, size/2 - 2
     if total == 0:
@@ -356,10 +399,10 @@ def make_pie_svg(proportions, size=64):
 
     paths = []
     start_angle = 0
-    for region, count in proportions.items():
+    for label, count in proportions.items():
         frac = count / total
         end_angle = start_angle + frac * 360
-        color = COLORS.get(region, '#cccccc')
+        color = color_map.get(label, '#cccccc')
          
         if frac >= 0.999:
             paths.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="{color}"/>')
@@ -381,7 +424,6 @@ def make_pie_svg(proportions, size=64):
 G = nx.Graph()
 median_counter = 0
 
-# Собираем маппинг node_id -> haplogroup для JS
 node_to_haplogroup = {}
 
 for idx, seq in enumerate(all_seq_list):
@@ -393,7 +435,7 @@ for idx, seq in enumerate(all_seq_list):
         median_counter += 1
         node_id = f"mv_{median_counter:02d}"
         node_label = f"mv{median_counter}"
-        total_traits = {}
+        country_counts = {}
         freq = 0
         hg = median_haplogroups.get(idx, None)
     else:
@@ -404,19 +446,17 @@ for idx, seq in enumerate(all_seq_list):
         node_label = str(freq)
         hg = hap_to_haplogroup.get(seq, None)
         
-        total_traits = defaultdict(int)
+        # Подсчёт по странам
+        country_counts = defaultdict(int)
         for name in ids:
-            if name in seq_traits:
-                for region, count in seq_traits[name].items():
-                    total_traits[region] += count
+            if name in seq_to_country:
+                country_counts[seq_to_country[name]] += 1
 
-    # Сохраняем для JS
     if hg:
         node_to_haplogroup[node_id] = hg
 
-    pie_img = make_pie_svg(total_traits, size=64)
+    pie_img = make_pie_svg(country_counts, country_colors, size=64)
     
-    # Цвет рамки по гаплогруппе
     border_color = hg_colors.get(hg, '#999999') if hg else '#999999'
     
     if is_median:
@@ -430,8 +470,8 @@ for idx, seq in enumerate(all_seq_list):
         node_size = 10
         font_size = 12
     else:
-        region_lines = [f"* {r}: {c}" for r, c in total_traits.items()]
-        region_text = "\n".join(region_lines) if region_lines else "* No data"
+        country_lines = [f"* {c}: {n}" for c, n in country_counts.items()]
+        country_text = "\n".join(country_lines) if country_lines else "* No data"
         
         seq_lines = [f"* {sid}" for sid in haplotypes[seq][:15]]
         if len(haplotypes[seq]) > 15:
@@ -445,7 +485,7 @@ for idx, seq in enumerate(all_seq_list):
             f"Frequency: {freq} sequences\n"
             f"{hg_text}"
             f"{'-' * 25}\n"
-            f"Regions:\n{region_text}\n"
+            f"Countries:\n{country_text}\n"
             f"{'-' * 25}\n"
             f"Sequences:\n{seq_text}"
         )
@@ -508,7 +548,7 @@ for d, i, j in potential_edges:
             color={'color': '#b0b0b0', 'highlight': '#333333'},
             value=edge_width,
             width=edge_width,
-            length=100,          # ← ДОБАВИЛИ: длина пружинки
+            length=100,
             smooth={'type': 'continuous', 'roundness': 0.1}
         )
         node_degrees[i] += 1
@@ -598,7 +638,7 @@ for idx_a, idx_b, dist in mst_bridges:
         color={'color': '#ff7f0e', 'highlight': '#d62728'},
         value=5.0,
         width=5.0,
-        length=400,              # ← ДОБАВИЛИ: мосты длиннее, чтобы кластеры были дальше
+        length=400,
         dashes=True,
         smooth={'type': 'curvedCW', 'roundness': 0.4}
     )
@@ -644,24 +684,20 @@ net.set_options("""
 """)
 
 # ==========================================
-# 10. HTML GENERATION + CONVEX HULL OVERLAY
+# 10. HTML GENERATION + CONVEX HULL + CONTROLS
 # ==========================================
 print("Generating final HTML with haplogroup hulls...")
 
-# Готовим данные для JS
 hg_map_json = json.dumps(node_to_haplogroup)
 hg_colors_json = json.dumps(hg_colors)
 hg_names_json = json.dumps(unique_haplogroups)
 
-# JavaScript для рисования convex hull поверх сети
 hull_js = f"""
 <script>
-// === HAPLOGROUP CONVEX HULL OVERLAY ===
 const haplogroupMap = {hg_map_json};
 const haplogroupColors = {hg_colors_json};
 const haplogroupNames = {hg_names_json};
 
-// Andrew's monotone chain convex hull algorithm
 function convexHull(points) {{
     if (points.length < 3) return points;
     const pts = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
@@ -684,7 +720,6 @@ function drawHull(ctx, points, color, label, padding) {{
     if (points.length === 0) return;
     
     if (points.length === 1) {{
-        // Один узел — рисуем круг
         ctx.beginPath();
         ctx.arc(points[0][0], points[0][1], padding, 0, 2 * Math.PI);
         ctx.fillStyle = color + '25';
@@ -703,7 +738,6 @@ function drawHull(ctx, points, color, label, padding) {{
     }}
     
     if (points.length === 2) {{
-        // Два узла — рисуем "капсулу"
         ctx.beginPath();
         ctx.moveTo(points[0][0], points[0][1]);
         ctx.lineTo(points[1][0], points[1][1]);
@@ -726,22 +760,18 @@ function drawHull(ctx, points, color, label, padding) {{
         return;
     }}
     
-    // 3+ узлов — convex hull
     const hull = convexHull(points);
     
-    // Центроид
     let cx = 0, cy = 0;
     for (const p of hull) {{ cx += p[0]; cy += p[1]; }}
     cx /= hull.length; cy /= hull.length;
     
-    // Расширяем hull от центроида на padding
     const expanded = hull.map(p => {{
         const dx = p[0] - cx, dy = p[1] - cy;
         const dist = Math.sqrt(dx*dx + dy*dy) || 1;
         return [cx + dx * (1 + padding / dist), cy + dy * (1 + padding / dist)];
     }});
     
-    // Рисуем заполнение
     ctx.beginPath();
     ctx.moveTo(expanded[0][0], expanded[0][1]);
     for (let i = 1; i < expanded.length; i++) {{
@@ -751,7 +781,6 @@ function drawHull(ctx, points, color, label, padding) {{
     ctx.fillStyle = color + '25';
     ctx.fill();
     
-    // Рисуем пунктирную рамку
     ctx.strokeStyle = color + '25';
     ctx.lineWidth = 3;
     ctx.lineJoin = 'round';
@@ -759,7 +788,6 @@ function drawHull(ctx, points, color, label, padding) {{
     ctx.stroke();
     ctx.setLineDash([]);
     
-    // Подпись гаплогруппы в центроиде
     ctx.fillStyle = '#000000';
     ctx.font = 'bold 96px Arial';
     ctx.textAlign = 'center';
@@ -767,11 +795,8 @@ function drawHull(ctx, points, color, label, padding) {{
     ctx.fillText(label, cx, cy);
 }}
 
-// Рисуем hull при каждом кадре (автоматически масштабируется при зуме/перетаскивании)
 network.on("afterDrawing", function(ctx) {{
     const positions = network.getPositions();
-    
-    // Группируем узлы по гаплогруппам
     const groups = {{}};
     for (const [nodeId, hg] of Object.entries(haplogroupMap)) {{
         if (positions[nodeId]) {{
@@ -779,8 +804,6 @@ network.on("afterDrawing", function(ctx) {{
             groups[hg].push([positions[nodeId].x, positions[nodeId].y]);
         }}
     }}
-    
-    // Рисуем hull для каждой гаплогруппы
     for (const [hg, points] of Object.entries(groups)) {{
         const color = haplogroupColors[hg] || '#999999';
         drawHull(ctx, points, color, hg, 80);
@@ -811,30 +834,27 @@ box-shadow: 2px 4px 12px rgba(0,0,0,0.2); z-index: 1000; font-size: 18px; color:
 </div>
 """
 
-# Легенда регионов (правый верхний угол)
+# Легенда стран (правый верхний угол)
+country_legend_items = ""
+for ctry in unique_countries:
+    color = country_colors[ctry]
+    country_legend_items += f'<span style="color:{color}; font-size: 36px; vertical-align: middle;">&#9679;</span> <span style="vertical-align: middle;">{ctry}</span><br>\n'
+
 legend_html = f"""
 <div style="position: fixed; top: 20px; right: 20px; background: rgba(255,255,255,0.97); 
 border: 1px solid #ccc; padding: 18px 22px; border-radius: 10px; font-family: Arial, sans-serif; 
 box-shadow: 2px 4px 12px rgba(0,0,0,0.2); z-index: 1000; font-size: 18px; color: #222; min-width: 260px; line-height: 1.4;">
     
-    <b style="font-size: 22px; display: block; margin-bottom: 10px; line-height: 1.0;">Regions:</b>
+    <b style="font-size: 22px; display: block; margin-bottom: 10px; line-height: 1.0;">Countries:</b>
     
     <div style="line-height: 0.75; margin-bottom: 4px;">
-        <span style="color:#1f77b4; font-size: 48px; vertical-align: middle;">&#9679;</span> 
-        <span style="vertical-align: middle;">North America</span><br>
-        <span style="color:#d62728; font-size: 48px; vertical-align: middle;">&#9679;</span> 
-        <span style="vertical-align: middle;">South America</span><br>
-        <span style="color:#8c564b; font-size: 48px; vertical-align: middle;">&#9679;</span> 
-        <span style="vertical-align: middle;">Europe</span><br>
-        <span style="color:#f1c40f; font-size: 48px; vertical-align: middle;">&#9679;</span> 
-        <span style="vertical-align: middle;">Asia</span><br>
-        <span style="color:#2ca02c; font-size: 48px; vertical-align: middle;">&#9679;</span> 
-        <span style="vertical-align: middle;">Australia</span>
+        {country_legend_items}
     </div>
 
     <hr style="margin: 12px 0; border: 0; border-top: 2px solid #ddd;">
     
     <div style="font-size: 15px; line-height: 1.5;">
+        <b>Group:</b> {FILTER_GROUP}<br>
         <b>Algorithm:</b> Median-Joining<br>
         <b>Threshold:</b> TCS {int(TCS_CONFIDENCE*100)}%<br>
         <b>Parsimony limit:</b> {TCS_LIMIT} mut.<br>
@@ -847,7 +867,7 @@ box-shadow: 2px 4px 12px rgba(0,0,0,0.2); z-index: 1000; font-size: 18px; color:
     <div style="font-size: 15px; line-height: 1.5;">
         <b>Size</b> = frequency<br>
         <b>Line width</b> = mutations (thicker = fewer)<br>
-        <b style="color:#ff7f0e;">┄ Dashed orange</b> = MST bridge<br>
+        <b style="color:#ff7f0e;">&#9476; Dashed orange</b> = MST bridge<br>
         <b style="color:#666;">&#9711; Dashed circle</b> = median vector<br>
         <i style="font-size:13px; color:#888;">(ancestral haplotype)</i>
     </div>
@@ -936,7 +956,6 @@ document.getElementById('cg-slider').addEventListener('input', function() {
 </script>
 """
 
-
 html_content = net.generate_html()
 html_content = html_content.replace("</body>", hull_js + "\n" + controls_html + "\n" + hg_legend_html + "\n" + legend_html + "\n</body>")
 
@@ -946,3 +965,4 @@ with open(OUTPUT_HTML, "w", encoding="utf-8") as f:
 print(f"Done! File '{OUTPUT_HTML}' is ready.")
 print(f"Summary: {len(unique_haps)} real haplotypes + {median_counter} median vectors.")
 print(f"Haplogroups: {len(unique_haplogroups)} ({', '.join(unique_haplogroups)})")
+print(f"Countries: {len(unique_countries)} ({', '.join(unique_countries)})")
