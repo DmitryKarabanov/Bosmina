@@ -9,10 +9,39 @@ Each visualization is a self-contained HTML file that can be opened directly in 
 
 | # | Visualization | Main file | Description |
 |---|---------------|-----------|-------------|
-| 1 | **Net** | `Bosmina_TCS_MedianJoining.html` | A nice haplotype network for the entire sample of *Bosmina* |
-| 2 | **bGMYC4** | `bGMYC_interactive_heatmap.html` and its corresponding resource directory | bGMYC4 results with phylogenetic tree and heatmap |
-| 3 | **Summary** | `Delimitation_heatmap_bgmyc_tree.html` and its corresponding resource directory | Comparison charts of all delimitation methods |
-| 4 | **Agreement** | `Agreement_Matrix.html` and its corresponding resource directory | Interactive heatmap showing congruence between delimitation methods |
+| 1 | **Net** | `Bosmina_TCS_MedianJoining.html` + subgenus networks | Haplotype networks for the entire genus and each subgenus |
+| 2 | **bGMYC4** | `bGMYC_interactive_heatmap.html` + resource directory | bGMYC4 results with phylogenetic tree and heatmap |
+| 3 | **Summary** | `Delimitation_heatmap_bgmyc_tree.html` + resource directory | Comparison charts of all delimitation methods |
+| 4 | **Agreement** | `Agreement_Matrix.html` + resource directory | Interactive heatmap showing congruence between delimitation methods |
+
+---
+
+## Haplotype Networks
+
+Interactive haplotype networks are available for the entire genus *Bosmina* and for each recognized subgenus. Nodes are sized by haplotype frequency, edges represent mutational steps.
+
+### Whole Genus
+
+| File | Description |
+|------|-------------|
+| `Bosmina_TCS_MedianJoining.html` | Median-Joining network for the full dataset — overall genetic structure and relationships between subgenera |
+
+### By Subgenus
+
+| File | Subgenus |
+|------|----------|
+| `Bosmina_TCS.html` | *Bosmina* s.str. |
+| `Liederobosmina_TCS.html` | *Liederobosmina* |
+| `Sinobosmina_TCS.html` | *Sinobosmina* |
+| `Eubosmina_TCS.html` | *Eubosmina* |
+| `Lunobosmina_TCS.html` | *Lunobosmina* |
+
+### How to Read the Networks
+
+- **Node size** — proportional to haplotype frequency in the sample
+- **Edge length / ticks** — number of mutational steps between haplotypes
+- **Colors** — geographic or taxonomic grouping (see legend in each file)
+- **Hover** — move cursor over any node to see haplotype details
 
 ---
 
