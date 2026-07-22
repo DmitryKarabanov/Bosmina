@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Haplotype Networks - Bosmina Project</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+    <!-- Единая шапка -->
+    <header class="page-header">
+        <h1 class="project-name"><i>Bosmina</i> Integrative Species Delimitation</h1>
+        <p class="project-tagline">Supplementary Materials & Interactive Visualizations</p>
+        
+        <a href="https://github.com/DmitryKarabanov/Bosmina" target="_blank" class="github-btn">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+            </svg>
+            View on GitHub
+        </a>
+    </header>
+
+    <nav class="main-nav">
+        <a href="../index.html">Home</a>
+        <a href="../data/index.html">Data</a>
+        <a href="../scripts/index.html">Scripts</a>
+        <a href="../results/index.html">Results</a>
+        <a href="index.html">Interactive</a>
+    </nav>
+
+    <main class="main-content">
+        <h1>🕸️ Haplotype Networks</h1>
+        <p>Interactive haplotype networks for the genus <i>Bosmina</i> and its subgenera. Each network is a self-contained HTML file — click any card below to open it in a new browser tab. </p>
+
+        <hr>
+
+        <h2>🌐 Whole Genus</h2>
+        <p>Complete network covering all sampled <i>Bosmina</i> sequences, reconstructed with the Median-Joining algorithm.</p>
+
+        <div class="card-grid">
+            <div class="card" style="grid-column: span 2;">
+                <h2>🕸️ <i>Bosmina</i> (entire genus)</h2>
+                <p>Median-Joining haplotype network for the full dataset. Best for exploring overall genetic structure and relationships between subgenera.</p>
+                <a href="Bosmina_TCS_MedianJoining.html" target="_blank" class="btn">Open Network →</a>
+            </div>
+        </div>
+
+        <hr>
+
+        <h2>🔬 By Subgenus</h2>
+        <p>Detailed TCS networks for each recognized subgenus. Use these to explore fine-scale haplotype relationships within individual lineages.</p>
+
+        <div class="card-grid">
+            <div class="card">
+                <h3><i>Bosmina</i> </h3>
+                <p>Haplotype network for the nominative subgenus <i>Bosmina</i> s.str.</p>
+                <a href="Bosmina_TCS.html" target="_blank" class="btn">Open Network →</a>
+            </div>
+
+            <div class="card">
+                <h3><i>Liederobosmina</i></h3>
+                <p>Haplotype network for the subgenus <i>Liederobosmina</i>.</p>
+                <a href="Liederobosmina_TCS.html" target="_blank" class="btn">Open Network →</a>
+            </div>
+
+            <div class="card">
+                <h3><i>Sinobosmina</i></h3>
+                <p>Haplotype network for the subgenus <i>Sinobosmina</i>.</p>
+                <a href="Sinobosmina_TCS.html" target="_blank" class="btn">Open Network →</a>
+            </div>
+
+            <div class="card">
+                <h3><i>Eubosmina</i></h3>
+                <p>Haplotype network for the subgenus <i>Eubosmina</i>.</p>
+                <a href="Eubosmina_TCS.html" target="_blank" class="btn">Open Network →</a>
+            </div>
+
+            <div class="card">
+                <h3><i>Lunobosmina</i></h3>
+                <p>Haplotype network for the subgenus <i>Lunobosmina</i>.</p>
+                <a href="Lunobosmina_TCS.html" target="_blank" class="btn">Open Network →</a>
+            </div>
+        </div>
+
+        <hr>
+
+        <h2>💡 How to Read the Networks</h2>
+        <ul>
+            <li><strong>Node size</strong> — proportional to haplotype frequency in the sample</li>
+            <li><strong>Edge length / ticks</strong> — number of mutational steps between haplotypes</li>
+            <li><strong>Colors</strong> — geographic or taxonomic grouping (see legend in each file)</li>
+            <li><strong>Hover</strong> — move cursor over any node to see details</li>
+        </ul>
+
+        <div style="margin-top: 2rem;">
+            <a href="index.html" class="btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;">← Back to Interactive</a>
+            <a href="../index.html" class="btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Back to Home</a>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <p>
+            <strong>Dmitry Karabanov</strong> | 
+            <a href="https://www.researchgate.net/profile/Dmitry-Karabanov" target="_blank">ResearchGate</a>
+        </p>
+        <p>
+            <small>This supplementary material is openly available under the GNU GPL v3.0 License. Last updated: 2026.</small>
+        </p>
+    </footer>
+
+</body>
+</html>
