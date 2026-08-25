@@ -13,7 +13,7 @@ Each visualization is a self-contained HTML file that can be opened directly in 
 | 2 | **bGMYC4** | `bGMYC_interactive_heatmap.html` + resource directory | bGMYC4 results with phylogenetic tree and heatmap |
 | 3 | **Summary** | `Delimitation_heatmap_bgmyc_tree.html` + resource directory | Comparison charts of all delimitation methods |
 | 4 | **Agreement** | `Agreement_Matrix.html` + resource directory | Interactive heatmap showing congruence between delimitation methods |
-| 5 | **GIS Map** | [NextGIS Web Map](https://bosminadistribution.nextgis.com/resource/33/display?panel=layers) | Interactive distribution map of all clades and subgenera |
+| 5 | **GIS Map** | [NextGIS Web Map](https://bosminadistribution.nextgis.com/resource/47/display?panel=layers) | Interactive distribution map of all clades and subgenera |
 
 ---
 
