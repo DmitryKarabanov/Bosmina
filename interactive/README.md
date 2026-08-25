@@ -23,7 +23,7 @@ Each visualization is a self-contained HTML file that can be opened directly in 
 
 [**Bosmina Integrative Delimitation**](https://dmitrykarabanov.github.io/Bosmina/interactive/index.html)
 
-[**GIS Distribution Map**](https://bosminadistribution.nextgis.com/resource/33/display?panel=layers)
+[**GIS Distribution Map**](https://bosminadistribution.nextgis.com/resource/47/display?panel=layers)
 
 ### Option 2: Open locally
 1. Download the `.html` file and the additional directory
