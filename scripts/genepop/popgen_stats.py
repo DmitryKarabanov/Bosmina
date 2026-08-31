@@ -19,7 +19,7 @@ except ImportError:
 # ==============================================================================
 # 1. SETTINGS
 # ==============================================================================
-NEXUS_FILE = "bosmina_popart.nex.txt"
+NEXUS_FILE = "bosmina_popart.nex"
 OUTPUT_CSV = "bosmina_full_popgen_stats.csv"
 N_PERMUTATIONS = 1000
 random.seed(42)
@@ -186,10 +186,12 @@ def calc_advanced_stats(seq_list, names_list, traits_dict, L, label="Dataset", d
                  term2 = P[k] * (i - 1) / (theta_locus + i - 1) if k <= i - 1 else 0.0
                  new_P[k] = term1 + term2
             P = new_P
+            
         f = sum(P[unique_haps:n+1])
-        if 0.0 < f < 1.0:
-            Fs = math.log(f) / (1.0 - f)
-
+        epsilon = 1e-15
+        f = max(epsilon, min(1.0 - epsilon, f))
+        Fs = math.log(f / (1.0 - f))
+        
     # 4.5. Mismatch Distribution
     mismatch_counts = defaultdict(int)
     for i in range(n):
