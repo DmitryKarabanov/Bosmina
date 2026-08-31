@@ -1,0 +1,11 @@
+region_a,n_a,region_b,n_b,Phi_ST,p_value
+Asia,15,Austral,5,0.5421,0.000999
+Asia,15,Eur,42,0.2689,0.000999
+Asia,15,NAmer,450,0.1736,0.000999
+Asia,15,SAmer,89,0.2266,0.000999
+Austral,5,Eur,42,0.5183,0.000999
+Austral,5,NAmer,450,0.3162,0.000999
+Austral,5,SAmer,89,0.3240,0.000999
+Eur,42,NAmer,450,0.1822,0.000999
+Eur,42,SAmer,89,0.2777,0.000999
+NAmer,450,SAmer,89,0.0946,0.000999

@@ -1,0 +1,122 @@
+================================================================================
+FULL POPULATION GENETIC ANALYSIS (p-distances + Rogers SSD) - v3
+================================================================================
+Reading NEXUS file...
+Loaded 601 sequences of length 657 bp.
+Calculating observed values for the ENTIRE SAMPLE...
+Calculating for region: Asia...
+Calculating for region: Austral...
+Calculating for region: Eur...
+Calculating for region: NAmer...
+Calculating for region: SAmer...
+  Global AMOVA permutations (K=5, N=601, 1000 replicates)... done! p(Phi_ST) = 0.000999
+  Pairwise Phi_ST permutations (10 pairs x 1000 replicates)... done!
+  SSD bootstrap skipped for 'REGION: Austral' (N=5 < MIN_N_BOOT=10).
+  Parametric bootstrap for SSD and SSD_w (5 groups x 1000 replicates)... done!
+     ALL SAMPLES: p(SSD) = p(raggedness) = 0.00999,  p(SSD_w) = 0.000999
+     REGION: Asia: p(SSD) = p(raggedness) = 0.00999,  p(SSD_w) = 0.03397
+     REGION: Eur: p(SSD) = p(raggedness) = 0.000999,  p(SSD_w) = 0.000999
+     REGION: NAmer: p(SSD) = p(raggedness) = 0.000999,  p(SSD_w) = 0.000999
+     REGION: SAmer: p(SSD) = p(raggedness) = 0.000999,  p(SSD_w) = 0.006993
+
+ALL SAMPLES (N=601, hap=220)
+  ----------------------------------------------------------------------
+  Polymorphic sites (S):         333 (singletons: 49, pars-inf: 308)
+  Haplotype diversity (h):       0.9862
+  Nucleotide diversity (pi):     179.8883 x 10^-3 (p-distance)
+  Tajima's D (our script):       4.3917
+  Tajima's D (scikit-allel):     4.3917 *
+  Fu's Fs:                       -0.8587   (p_expansion = 0.2976)
+  Mismatch fit:                  tau=130.36, theta0=15.06  (fit mean 145.4 vs observed k = 118.2)
+  Mismatch Raggedness (r):       0.0034
+  Mismatch SSD:                  0.0034
+  Mismatch SSD (weighted):       170.9310
+  +-- p(SSD = raggedness):       0.00999,  p(SSD_w) = 0.000999  (> 0.05: expansion model not rejected)
+
+REGION: Asia (N=15, hap=14)
+  ----------------------------------------------------------------------
+  Polymorphic sites (S):         220 (singletons: 97, pars-inf: 157)
+  Haplotype diversity (h):       0.9905
+  Nucleotide diversity (pi):     131.4199 x 10^-3 (p-distance)
+  Tajima's D (our script):       1.2223
+  Tajima's D (scikit-allel):     1.2223 *
+  Fu's Fs:                       0.8447   (p_expansion = 0.6995)
+  Mismatch fit:                  tau=107.65, theta0=19.15  (fit mean 126.8 vs observed k = 86.3)
+  Mismatch Raggedness (r):       0.0214
+  Mismatch SSD:                  0.0214
+  Mismatch SSD (weighted):       1.5300
+  +-- p(SSD = raggedness):       0.00999,  p(SSD_w) = 0.03397  (> 0.05: expansion model not rejected)
+
+REGION: Austral (N=5, hap=3)
+  ----------------------------------------------------------------------
+  Polymorphic sites (S):         28 (singletons: 27, pars-inf: 1)
+  Haplotype diversity (h):       0.8000
+  Nucleotide diversity (pi):     17.3516 x 10^-3 (p-distance)
+  Tajima's D (our script):       -1.1330
+  Tajima's D (scikit-allel):     -1.1330 *
+  Fu's Fs:                       nan   (p_expansion = n/a)
+  Mismatch fit:                  tau=30.47, theta0=0.00  (fit mean 30.5 vs observed k = 11.4)
+  Mismatch Raggedness (r):       0.2451
+  Mismatch SSD:                  0.2451
+  Mismatch SSD (weighted):       2.4514
+
+REGION: Eur (N=42, hap=18)
+  ----------------------------------------------------------------------
+  Polymorphic sites (S):         211 (singletons: 20, pars-inf: 196)
+  Haplotype diversity (h):       0.8479
+  Nucleotide diversity (pi):     134.4354 x 10^-3 (p-distance)
+  Tajima's D (our script):       2.9586
+  Tajima's D (scikit-allel):     2.9586 *
+  Fu's Fs:                       21.9355   (p_expansion = 1)
+  Mismatch fit:                  tau=157.76, theta0=0.00  (fit mean 157.8 vs observed k = 88.3)
+  Mismatch Raggedness (r):       0.0661
+  Mismatch SSD:                  0.0661
+  Mismatch SSD (weighted):       26.2338
+  +-- p(SSD = raggedness):       0.000999,  p(SSD_w) = 0.000999  (> 0.05: expansion model not rejected)
+
+REGION: NAmer (N=450, hap=150)
+  ----------------------------------------------------------------------
+  Polymorphic sites (S):         314 (singletons: 46, pars-inf: 297)
+  Haplotype diversity (h):       0.9787
+  Nucleotide diversity (pi):     173.8569 x 10^-3 (p-distance)
+  Tajima's D (our script):       4.3285
+  Tajima's D (scikit-allel):     4.3285 *
+  Fu's Fs:                       8.5112   (p_expansion = 0.9998)
+  Mismatch fit:                  tau=129.80, theta0=18.88  (fit mean 148.7 vs observed k = 114.2)
+  Mismatch Raggedness (r):       0.0053
+  Mismatch SSD:                  0.0053
+  Mismatch SSD (weighted):       185.6803
+  +-- p(SSD = raggedness):       0.000999,  p(SSD_w) = 0.000999  (> 0.05: expansion model not rejected)
+
+REGION: SAmer (N=89, hap=36)
+  ----------------------------------------------------------------------
+  Polymorphic sites (S):         257 (singletons: 10, pars-inf: 251)
+  Haplotype diversity (h):       0.9477
+  Nucleotide diversity (pi):     162.5661 x 10^-3 (p-distance)
+  Tajima's D (our script):       3.7557
+  Tajima's D (scikit-allel):     3.7557 *
+  Fu's Fs:                       27.0294   (p_expansion = 1)
+  Mismatch fit:                  tau=110.51, theta0=38.08  (fit mean 148.6 vs observed k = 106.8)
+  Mismatch Raggedness (r):       0.0161
+  Mismatch SSD:                  0.0161
+  Mismatch SSD (weighted):       18.9008
+  +-- p(SSD = raggedness):       0.000999,  p(SSD_w) = 0.006993  (> 0.05: expansion model not rejected)
+
+--------------------------------------------------------------------------------
+PAIRWISE Phi_ST (permutation test, individuals permuted between regions):
+  Asia         vs Austral      (N=15+5):  Phi_ST = 0.5421   p = 0.000999
+  Asia         vs Eur          (N=15+42):  Phi_ST = 0.2689   p = 0.000999
+  Asia         vs NAmer        (N=15+450):  Phi_ST = 0.1736   p = 0.000999
+  Asia         vs SAmer        (N=15+89):  Phi_ST = 0.2266   p = 0.000999
+  Austral      vs Eur          (N=5+42):  Phi_ST = 0.5183   p = 0.000999
+  Austral      vs NAmer        (N=5+450):  Phi_ST = 0.3162   p = 0.000999
+  Austral      vs SAmer        (N=5+89):  Phi_ST = 0.3240   p = 0.000999
+  Eur          vs NAmer        (N=42+450):  Phi_ST = 0.1822   p = 0.000999
+  Eur          vs SAmer        (N=42+89):  Phi_ST = 0.2777   p = 0.000999
+  NAmer        vs SAmer        (N=450+89):  Phi_ST = 0.0946   p = 0.000999
+
+Pairwise Phi_ST saved to 'bosmina_pairwise_phi_st.csv'
+
+Results successfully saved to 'bosmina_full_popgen_stats.csv'
+
+Legend saved to 'bosmina_columns_legend.csv'

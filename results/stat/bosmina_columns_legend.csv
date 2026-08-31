@@ -1,0 +1,28 @@
+﻿Column,Description
+label,Name of the analyzed group
+N,Sample size (number of sequences)
+nhap,Number of unique haplotypes
+S,Number of polymorphic sites
+S_single,Number of singleton (single-copy) segregating sites
+S_inf,Parsimony-informative sites
+h,Haplotype diversity
+pi,"Nucleotide diversity (p-distance, per site)"
+k,Mean absolute number of pairwise differences
+theta_w,Watterson's Theta (per site)
+theta_pi,Tajima's Theta (per site)
+Tajima_D,Tajima's D-statistic (our calculation)
+Tajima_D_allel,Tajima's D-statistic (reference scikit-allel)
+Fu_Fs,Fu's Fs (log-odds form; negative = excess of haplotypes / expansion)
+p_Fs,One-sided P-value for Fu's Fs: P(K >= observed haplotypes) under Ewens neutrality with theta = pi. Small = significant haplotype excess (expansion); values near 1.0 indicate a deficit instead (bottleneck/structure); for the deficit direction use 1 - p_Fs.
+tau,Mismatch fit: time since sudden expansion (units of pairwise differences)
+theta0,Mismatch fit: ancestral population theta
+raggedness,Harpending's raggedness (squared deviation of observed histogram from the expected Rogers spectrum; identical to SSD under OLS fit)
+SSD,Sum of squared deviations from the fitted Rogers expansion model
+SSD_w,"Chi-square-like weighted SSD: sum (h_i - e_i)^2 / max(e_i, 1/n_pairs). Emphasises misfit in low-probability classes (histogram tails); when no floor is active, n_pairs * SSD_w approximates the Pearson chi-square of the fit. Weights are taken from the OLS-fitted spectrum (one-step GLS)."
+p_SSD_w,"Parametric-bootstrap P-value for the weighted SSD (same coalescent simulations as p_SSD, no extra runtime)"
+p_raggedness,"Parametric-bootstrap P-value (equals p_SSD; coalescent simulation under the fitted model with refitting, computed per group)"
+p_SSD,"Parametric-bootstrap P-value for SSD under the fitted sudden-expansion model (simulated with fitted tau/theta0, model refitted per replicate)"
+Phi_ST,"Fixation index (1-level AMOVA, Excoffier et al. 1992; normalized SSD_T = (1/N)*sum d_ij, SSD_W = sum_g (1/n_g)*sum d_ij; can be slightly negative if regions are less differentiated than random)"
+p_Phi_ST,P-value for Phi_ST (permutation of individuals among regions)
+var_among_pct,% of variance among regions (sigma2_among / sigma2_total)
+var_within_pct,% of variance within regions
