@@ -174,6 +174,23 @@ def fit_rogers_model(P_obs):
     P_exp = rogers_mismatch_pdf(x, tau_hat, theta_hat)
     ssd = float(np.sum((P_obs - P_exp) ** 2))
     return tau_hat, theta_hat, P_exp, ssd
+def weighted_ssd(P_obs, P_exp, n_pairs):
+    """
+    Chi-square-like (GLS-style) weighted SSD:
+        SSD_w = sum_i (h_i - e_i)^2 / max(e_i, 1/n_pairs)
+    Weights 1/e_i emphasise misfit in low-probability classes (histogram
+    tails), in the spirit of the weighted fitting of Arlequin
+    (Schneider & Excoffier 1999). The floor 1/n_pairs caps the weight of
+    (near-)empty expected classes at n_pairs, i.e. at the weight of a class
+    with expected count of 1 pair - otherwise a single tail class would
+    dominate the statistic.
+    NOTE: unlike Arlequin, the expected spectrum is taken from the OLS fit
+    (one-step GLS weighting, no iteratively reweighted fitting).
+    """
+    P_exp = np.asarray(P_exp, dtype=float)
+    floor = 1.0 / float(n_pairs)
+    w = 1.0 / np.maximum(P_exp, floor)
+    return float(np.sum(w * (P_obs - P_exp) ** 2))
 
 # ==============================================================================
 # 3c. PARAMETRIC BOOTSTRAP: coalescent simulation under the fitted model
@@ -243,15 +260,20 @@ def simulate_expansion_pairwise(n, tau, theta_anc, rng):
 
 
 def worker_mismatch_parametric(args):
-    """One bootstrap replicate: simulate under the fitted model, refit, return SSD."""
+    """One bootstrap replicate: simulate under the fitted model, refit,
+    return (SSD_ols, SSD_weighted) computed from the same replicate."""
     n, tau, theta0, seed = args
     rng = np.random.default_rng(seed)
     D = simulate_expansion_pairwise(n, tau, theta0, rng)
     diffs = D[np.triu_indices(n, k=1)]
     counts = np.bincount(diffs)
-    P_sim = counts / counts.sum()
-    _, _, _, ssd_sim = fit_rogers_model(P_sim)
-    return ssd_sim
+    n_pairs = int(counts.sum())
+    P_sim = counts / n_pairs
+    _, _, P_exp_sim, ssd_sim = fit_rogers_model(P_sim)
+    if ssd_sim is None or math.isnan(ssd_sim):
+        return float('nan'), float('nan')
+    ssd_w_sim = weighted_ssd(P_sim, P_exp_sim, n_pairs)
+    return ssd_sim, ssd_w_sim
 
 # ==============================================================================
 # 3d. AMOVA (Excoffier et al. 1992) - module level, multiprocessing-safe
@@ -438,7 +460,7 @@ def calc_advanced_stats(seq_list, names_list, traits_dict, L, label="Dataset", d
     max_diff = max(mismatch_counts.keys()) if mismatch_counts else 0
     P_obs = np.array([mismatch_counts[i] / n_pairs for i in range(max_diff + 1)])
 
-    raggedness, ssd = float('nan'), float('nan')
+    raggedness, ssd, ssd_w = float('nan'), float('nan'), float('nan')
     tau_hat, theta_hat = float('nan'), float('nan')
     if len(P_obs) >= 2:
         tau_hat, theta_hat, P_exp, ssd = fit_rogers_model(P_obs)
@@ -446,6 +468,8 @@ def calc_advanced_stats(seq_list, names_list, traits_dict, L, label="Dataset", d
             # Harpending's raggedness: squared deviation of the OBSERVED histogram
             # from the EXPECTED (Rogers) one; identical to SSD under the OLS fit.
             raggedness = ssd
+            # Chi-square-like weighted variant (see weighted_ssd docstring)
+            ssd_w = weighted_ssd(P_obs, P_exp, n_pairs)
 
     # 4.6. AMOVA (1-level), only for the pooled dataset
     Phi_ST, var_among, var_within, var_total = (float('nan'), float('nan'),
@@ -454,7 +478,15 @@ def calc_advanced_stats(seq_list, names_list, traits_dict, L, label="Dataset", d
         region_indices = assign_regions(names_list, traits_dict)
         valid_regions = {k2: v for k2, v in sorted(region_indices.items()) if len(v) >= 2}
         if len(valid_regions) >= 2:
-            Phi_ST, var_among, var_within = amova_phi_st(dist_mat, list(valid_regions.values()))
+            # same subsetting as in run_global_amova_perm: submatrix over
+            # individuals of valid regions, groups relabelled locally
+            idx = np.concatenate([np.asarray(v, dtype=np.int64) for v in valid_regions.values()])
+            sub = dist_mat[np.ix_(idx, idx)]
+            local, pos = [], 0
+            for v in valid_regions.values():
+                local.append(np.arange(pos, pos + len(v)))
+                pos += len(v)
+            Phi_ST, var_among, var_within = amova_phi_st(sub, local)
             var_total = var_among + var_within
 
     return {
@@ -462,10 +494,10 @@ def calc_advanced_stats(seq_list, names_list, traits_dict, L, label="Dataset", d
         'S_inf': S_inf, 'h': h, 'pi': pi, 'k': k_mean, 'theta_w': theta_w,
         'theta_pi': theta_pi, 'Tajima_D': D_stat, 'Tajima_D_allel': Tajima_D_allel,
         'Fu_Fs': Fs, 'p_Fs': p_Fs, 'tau': tau_hat, 'theta0': theta_hat,
-        'raggedness': raggedness, 'SSD': ssd, 'Phi_ST': Phi_ST,
+        'raggedness': raggedness, 'SSD': ssd, 'SSD_w': ssd_w, 'Phi_ST': Phi_ST,
         'var_among_pct': (var_among / var_total * 100) if not math.isnan(var_total) and var_total > 0 else float('nan'),
         'var_within_pct': (var_within / var_total * 100) if not math.isnan(var_total) and var_total > 0 else float('nan'),
-        'p_Phi_ST': float('nan'), 'p_raggedness': float('nan'), 'p_SSD': float('nan')
+        'p_Phi_ST': float('nan'), 'p_raggedness': float('nan'), 'p_SSD': float('nan'), 'p_SSD_w': float('nan')
     }
 
 # ==============================================================================
@@ -478,14 +510,22 @@ def run_global_amova_perm(dist_mat, region_indices, phi_obs, N_PERM):
     if len(valid_regions) < 2:
         print("  Global AMOVA permutations skipped (fewer than 2 regions with N >= 2).")
         return float('nan')
-    sizes = np.array([len(v) for v in valid_regions.values()], dtype=np.int64)
+
+    # Subset the distance matrix to individuals of valid regions ONLY -
+    # exactly the same submatrix on which the observed Phi_ST is computed
+    # in calc_advanced_stats (same sorted() ordering of regions!).
+    group_indices = [np.asarray(v, dtype=np.int64) for v in valid_regions.values()]
+    idx = np.concatenate(group_indices)
+    D_sub = dist_mat[np.ix_(idx, idx)]
+
+    sizes = np.array([len(g) for g in group_indices], dtype=np.int64)
     n = int(sizes.sum())
     K = len(sizes)
     n_c = (float(n) * n - float(np.sum(sizes.astype(np.float64) ** 2))) / (float(n) * (K - 1))
     args_list = [(sizes, n_c, 100_000 + i) for i in range(N_PERM)]
     print(f"  Global AMOVA permutations (K={K}, N={n}, {N_PERM} replicates)... ", end="", flush=True)
     with ProcessPoolExecutor(max_workers=n_cores, initializer=init_worker_amova,
-                             initargs=(dist_mat,)) as executor:
+                             initargs=(D_sub,)) as executor:
         results = list(executor.map(worker_amova_perm, args_list))
     results = [r for r in results if not math.isnan(r)]
     if not results:
@@ -495,7 +535,6 @@ def run_global_amova_perm(dist_mat, region_indices, phi_obs, N_PERM):
     p = (count_extreme + 1) / (len(results) + 1)
     print(f"done! p(Phi_ST) = {p:.4g}")
     return p
-
 
 def run_pairwise_phi_st(dist_mat, region_indices, N_PERM):
     """Observed + permutation p-values for Phi_ST between all pairs of regions."""
@@ -544,9 +583,8 @@ def run_pairwise_phi_st(dist_mat, region_indices, N_PERM):
     print("done!")
     return pairs
 
-
 def run_ssd_bootstraps(results, N_PERM, min_n=MIN_N_BOOT):
-    """Parametric bootstrap p-values for SSD/raggedness of every eligible group."""
+    """Parametric bootstrap p-values for SSD (OLS) and SSD_w (weighted)."""
     total_cores = os.cpu_count() or 4
     n_cores = max(1, total_cores - 1)
     tasks, task_group = [], []
@@ -562,23 +600,28 @@ def run_ssd_bootstraps(results, N_PERM, min_n=MIN_N_BOOT):
     if not tasks:
         return
     n_groups = len(set(task_group))
-    print(f"  Parametric bootstrap for SSD ({n_groups} groups x {N_PERM} replicates)... ",
+    print(f"  Parametric bootstrap for SSD and SSD_w ({n_groups} groups x {N_PERM} replicates)... ",
           end="", flush=True)
     with ProcessPoolExecutor(max_workers=n_cores) as executor:
         results_boot = list(executor.map(worker_mismatch_parametric, tasks))
-    counts, valid = defaultdict(int), defaultdict(int)
-    for gi, ssd_sim in zip(task_group, results_boot):
+    counts, counts_w, valid = defaultdict(int), defaultdict(int), defaultdict(int)
+    for gi, (ssd_sim, ssd_w_sim) in zip(task_group, results_boot):
         if ssd_sim is not None and not math.isnan(ssd_sim):
             valid[gi] += 1
             if ssd_sim >= results[gi]['SSD']:
                 counts[gi] += 1
+            if not math.isnan(ssd_w_sim) and ssd_w_sim >= results[gi]['SSD_w']:
+                counts_w[gi] += 1
     print("done!")
     for gi in sorted(valid):
         if valid[gi] > 0:
-            p = (counts[gi] + 1) / (valid[gi] + 1)
-            results[gi]['p_SSD'] = p
-            results[gi]['p_raggedness'] = p
-            print(f"     {results[gi]['label']}: p(SSD) = p(raggedness) = {p:.4g}")
+            p_ols = (counts[gi] + 1) / (valid[gi] + 1)
+            results[gi]['p_SSD'] = p_ols
+            results[gi]['p_raggedness'] = p_ols
+            results[gi]['p_SSD_w'] = (counts_w[gi] + 1) / (valid[gi] + 1)
+            print(f"     {results[gi]['label']}: p(SSD) = p(raggedness) = {p_ols:.4g},  "
+                  f"p(SSD_w) = {results[gi]['p_SSD_w']:.4g}")
+
 
 # ==============================================================================
 # 6. MAIN EXECUTION BLOCK (REQUIRED FOR WINDOWS!)
@@ -643,15 +686,15 @@ if __name__ == '__main__':
             fit_mean = s['tau'] + s['theta0']
             print(f"  Mismatch fit:                  tau={s['tau']:.2f}, theta0={s['theta0']:.2f}  "
                   f"(fit mean {fit_mean:.1f} vs observed k = {s['k']:.1f})")
-        print(f"  Mismatch Raggedness (r):       {s['raggedness']:.4f}")
-        print(f"  Mismatch SSD:                  {s['SSD']:.4f}")
-        if not math.isnan(s.get('p_SSD', float('nan'))):
-            print(f"  +-- p(SSD = raggedness):       {s['p_SSD']:.4g}  (> 0.05: expansion model not rejected)")
-        if s['label'] == "ALL SAMPLES" and not math.isnan(s.get('Phi_ST', float('nan'))):
-            print(f"  +-- AMOVA (1-level):")
-            print(f"  |  Variation Among Regions:   {s['var_among_pct']:.2f}%")
-            print(f"  |  Variation Within Regions:  {s['var_within_pct']:.2f}%")
-            print(f"  +-- Phi_ST:                    {s['Phi_ST']:.4f}  (p={s.get('p_Phi_ST', float('nan')):.4g})")
+            print(f"  Mismatch Raggedness (r):       {s['raggedness']:.4f}")
+            print(f"  Mismatch SSD:                  {s['SSD']:.4f}")
+            if not math.isnan(s.get('SSD_w', float('nan'))):
+                print(f"  Mismatch SSD (weighted):       {s['SSD_w']:.4f}")
+            if not math.isnan(s.get('p_SSD', float('nan'))):
+                    p_w_str = (f",  p(SSD_w) = {s['p_SSD_w']:.4g}"
+                               if not math.isnan(s.get('p_SSD_w', float('nan'))) else "")
+                    print(f"  +-- p(SSD = raggedness):       {s['p_SSD']:.4g}{p_w_str}"
+                          f"  (> 0.05: expansion model not rejected)")
 
     for res in results:
         print_stats(res)
@@ -672,9 +715,10 @@ if __name__ == '__main__':
 
     fieldnames = ['label', 'N', 'nhap', 'S', 'S_single', 'S_inf', 'h', 'pi', 'k',
                   'theta_w', 'theta_pi', 'Tajima_D', 'Tajima_D_allel', 'Fu_Fs', 'p_Fs',
-                  'tau', 'theta0', 'raggedness', 'SSD', 'p_raggedness', 'p_SSD',
+                  'tau', 'theta0', 'raggedness', 'SSD', 'SSD_w',
+                  'p_raggedness', 'p_SSD', 'p_SSD_w',
                   'Phi_ST', 'p_Phi_ST', 'var_among_pct', 'var_within_pct']
-    p_cols = {'p_Fs', 'p_SSD', 'p_raggedness', 'p_Phi_ST'}
+    p_cols = {'p_Fs', 'p_SSD', 'p_SSD_w', 'p_raggedness', 'p_Phi_ST'}
 
     with open(OUTPUT_CSV, 'w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -716,6 +760,13 @@ if __name__ == '__main__':
         'raggedness': ("Harpending's raggedness (squared deviation of observed histogram "
                        "from the expected Rogers spectrum; identical to SSD under OLS fit)"),
         'SSD': 'Sum of squared deviations from the fitted Rogers expansion model',
+        'SSD_w': ('Chi-square-like weighted SSD: sum (h_i - e_i)^2 / max(e_i, 1/n_pairs). '
+          'Emphasises misfit in low-probability classes (histogram tails); '
+          'when no floor is active, n_pairs * SSD_w approximates the Pearson '
+          'chi-square of the fit. Weights are taken from the OLS-fitted '
+          'spectrum (one-step GLS).'),
+        'p_SSD_w': ('Parametric-bootstrap P-value for the weighted SSD '
+            '(same coalescent simulations as p_SSD, no extra runtime)'),
         'p_raggedness': ('Parametric-bootstrap P-value (equals p_SSD; coalescent simulation '
                          'under the fitted model with refitting, computed per group)'),
         'p_SSD': ('Parametric-bootstrap P-value for SSD under the fitted sudden-expansion '
