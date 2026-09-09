@@ -1,7 +1,9 @@
 # _Bosmina_ Integrative Delimitation
 **Supplementary Materials & Interactive Visualizations**
 
-Welcome to the supplementary materials repository for integrative species delimitation analysis of *Bosmina* (Cladocera: Bosminidae). This repository contains all data, scripts, and results supporting our research.
+Welcome to the supplementary materials repository for integrative species delimitation analysis of *Bosmina* (Cladocera: Bosminidae). This repository contains all data, scripts, and results supporting our research. 
+
+See the web version: https://dmitrykarabanov.github.io/Bosmina/
 
 ![License](https://img.shields.io/badge/license-GPLv3-blue)
 
